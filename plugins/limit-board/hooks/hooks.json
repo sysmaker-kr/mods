@@ -1,0 +1,4 @@
+{
+  "description": "한도·캐시 전광판 훅 모듈",
+  "modules": ["./register.js"]
+}

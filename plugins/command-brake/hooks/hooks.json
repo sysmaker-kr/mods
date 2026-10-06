@@ -1,0 +1,4 @@
+{
+  "description": "위험 명령 브레이크 훅 모듈",
+  "modules": ["./register.js"]
+}

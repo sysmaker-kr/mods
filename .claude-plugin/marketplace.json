@@ -1,0 +1,10 @@
+{
+  "name": "sysmaker",
+  "description": "시스메이커가 만든 클로드 코드 모드 — 질문 장부·한도 전광판·위험 명령 브레이크",
+  "owner": { "name": "sysmaker" },
+  "plugins": [
+    { "name": "ask-ledger", "source": "./plugins/ask-ledger", "description": "질문 장부 — 여러 개를 물었을 때 놓친 질문·내가 정할 것·리스크를 입력창 위에 보여 줍니다" },
+    { "name": "limit-board", "source": "./plugins/limit-board", "description": "한도·캐시 전광판 — 5시간·주간 한도, 컨텍스트, 캐시 남은 시간을 입력창 위에 보여 줍니다" },
+    { "name": "command-brake", "source": "./plugins/command-brake", "description": "위험 명령 브레이크 — 폴더 통째 삭제·강제 덮어쓰기 명령을 실행 직전에 한 번 묻습니다" }
+  ]
+}
