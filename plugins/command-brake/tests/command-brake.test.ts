@@ -56,3 +56,51 @@ test('묻을 사람이 없는 실행(claude -p)에서는 끼어들지 않는다'
   expect(await $.tool.call({ tool: 'Bash', command: 'rm -rf build' })).toEqual({ result: 'ran' })
   expect(asked.length).toBe(0)
 })
+
+// 0.2.0 — 파일 하나 지우기도 잡고, 무엇을·왜·되돌릴 수 있나를 한국어로 보여 준다
+test('파일 하나 지우기도 멈추고, 지울 파일과 클로드의 설명을 보여 준다', async ($, on) => {
+  const asked: string[] = []
+  stubs(on, '거절', asked)
+  await start($)
+  const out = await $.tool.call({ tool: 'Bash', command: 'rm "business/업로드대기/04_s7_x/s7_영상_효과음적게.mp4"', description: '효과음 적게 버전 복사본 지우기' })
+  expect(asked.length).toBe(1)
+  expect(asked[0]).toContain('파일 삭제')
+  expect(asked[0]).toContain('왜: 효과음 적게 버전 복사본 지우기')
+  expect(asked[0]).toContain('s7_영상_효과음적게.mp4')
+  expect(asked[0]).toContain('되돌릴 수 없습니다')
+  expect(out.deny).toContain('파일 삭제')
+})
+
+test('변수로 적힌 경로는 따로 경고한다', async ($, on) => {
+  const asked: string[] = []
+  stubs(on, '거절', asked)
+  await start($)
+  await $.tool.call({ tool: 'Bash', command: 'D=$(ls -d out/*); rm "$D/a.mp4"' })
+  expect(asked[0]).toContain('변수')
+})
+
+test('설명이 없으면 없다고 알려 준다', async ($, on) => {
+  const asked: string[] = []
+  stubs(on, '거절', asked)
+  await start($)
+  await $.tool.call({ tool: 'Bash', command: 'rm notes.txt' })
+  expect(asked[0]).toContain('설명을 붙이지 않았습니다')
+})
+
+test('임시 폴더(/tmp)만 지우는 정리는 묻지 않는다', async ($, on) => {
+  const asked: string[] = []
+  stubs(on, '거절', asked)
+  await start($)
+  expect(await $.tool.call({ tool: 'Bash', command: 'rm -rf /tmp/scratch/preview' })).toEqual({ result: 'ran' })
+  expect(asked.length).toBe(0)
+})
+
+test('find -delete 도 잡는다', async ($, on) => {
+  const asked: string[] = []
+  stubs(on, '거절', asked)
+  await start($)
+  const out = await $.tool.call({ tool: 'Bash', command: 'find business -name "*.bak" -delete' })
+  expect(asked[0]).toContain('찾은 파일 한꺼번에 삭제')
+  expect(asked[0]).toContain('*.bak')
+  expect(out.deny).toBeTruthy()
+})
