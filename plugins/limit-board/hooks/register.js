@@ -26,10 +26,17 @@ function clockText(iso) {
   return hh + ':' + mm
 }
 
-function level(pct) {
-  if (pct >= 80) return 'red'
-  if (pct >= 50) return 'yellow'
-  return null
+// 건전지: 남은 양을 휴대폰 배터리처럼 채운다 (2026-10-06 사용자 "건전지 형식이 더 직관적")
+function battery(left, width) {
+  const n = Math.max(0, Math.min(width, Math.round((left / 100) * width)))
+  return '█'.repeat(n) + '░'.repeat(width - n)
+}
+
+// 남은 양 기준 색: 넉넉하면 초록, 절반 아래 노랑, 20% 아래 빨강
+function tone(left) {
+  if (left < 20) return 'red'
+  if (left < 50) return 'yellow'
+  return 'green'
 }
 
 export function register(on) {
@@ -65,30 +72,49 @@ export function register(on) {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!five && !week && ctx === null && lastAt === null) return next(e)
     const { Box, Text } = $.ui.resolve(e)
-    const parts = [Text({ bold: true, children: ['한도'] })]
-    const pct = (label, v, reset) => {
-      const props = { children: [label + ' ' + v.pct + '%' + (reset ? ' (' + reset + ' 초기화)' : '')] }
-      const c = level(v.pct)
-      return Text(c ? { ...props, color: c, bold: true } : props)
+    const cols = (e.props && e.props.bodyColumns) || 100
+    const width = cols >= 110 ? 10 : cols >= 80 ? 6 : 4
+
+    // 칸 하나 = 이름 + 건전지 + 남은 양 (+ 덧붙임)
+    const cell = (label, left, value, extra, color) =>
+      Box({
+        flexDirection: 'row',
+        children: [
+          Text({ bold: true, children: [label + ' '] }),
+          Text({ dimColor: true, children: ['▕'] }),
+          Text({ color: color || tone(left), children: [battery(left, width)] }),
+          Text({ dimColor: true, children: ['▏'] }),
+          Text({ color: color || tone(left), bold: !color && left < 20, children: [' ' + value] }),
+          ...(extra ? [Text({ dimColor: true, children: [' ' + extra] })] : []),
+        ],
+      })
+
+    const cells = []
+    if (five) {
+      const left = Math.max(0, 100 - five.pct)
+      const reset = clockText(five.resetsAt)
+      cells.push(cell('5시간', left, left + '% 남음', reset && cols >= 110 ? reset + ' 충전' : ''))
     }
-    if (five) parts.push(pct('5시간', five, clockText(five.resetsAt)))
-    if (week) parts.push(pct('주간', week, ''))
+    if (week) {
+      const left = Math.max(0, 100 - week.pct)
+      cells.push(cell('주간', left, left + '% 남음'))
+    }
     if (ctx !== null) {
-      const c = level(ctx)
-      const props = { children: ['컨텍스트 ' + ctx + '%'] }
-      parts.push(Text(c ? { ...props, color: c } : props))
+      const left = Math.max(0, 100 - ctx)
+      cells.push(cell('대화 여유', left, left + '%'))
     }
     if (lastAt !== null) {
-      const left = ttl() - ((await $.clock.now()) - lastAt)
-      if (left <= 0) {
-        parts.push(Text({ color: 'red', bold: true, children: ['캐시 식음 · 다음 질문은 처음부터 다시 읽어요'] }))
+      const total = ttl()
+      const leftMs = total - ((await $.clock.now()) - lastAt)
+      if (leftMs <= 0) {
+        cells.push(Text({ color: 'red', bold: true, children: ['캐시 식음 · 다음 질문은 처음부터 다시 읽어요'] }))
       } else {
-        const m = Math.ceil(left / MIN)
-        const props = { children: ['캐시 ' + m + '분 남음'] }
-        parts.push(Text(m <= 10 ? { ...props, color: 'yellow' } : { ...props, dimColor: true }))
+        const m = Math.ceil(leftMs / MIN)
+        const left = Math.round((leftMs / total) * 100)
+        cells.push(cell('캐시', left, m + '분', '', m <= 10 ? 'yellow' : 'green'))
       }
     }
-    const mine = Box({ flexDirection: 'row', columnGap: 2, children: parts })
+    const mine = Box({ flexDirection: 'row', columnGap: 3, paddingX: 1, children: cells })
     const theirs = await next(e)
     return theirs ? Box({ flexDirection: 'column', children: [theirs, mine] }) : mine
   })

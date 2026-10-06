@@ -1,6 +1,6 @@
 {
   "name": "limit-board",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "한도·캐시 전광판 — 5시간·주간 한도, 컨텍스트 사용률, 캐시가 식기까지 남은 시간을 프롬프트 위에 보여 줍니다",
   "author": { "name": "sysmaker" }
 }

@@ -31,9 +31,11 @@ test('5시간·주간 한도와 컨텍스트 사용률을 보여 준다', async 
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
   await measure($, SUB)
   const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await band.find({ type: 'Text', text: /^5시간 42%/ })).toBeDefined()
-  expect(await band.find({ type: 'Text', text: '주간 18%' })).toBeDefined()
-  expect(await band.find({ type: 'Text', text: '컨텍스트 31%' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: ' 58% 남음' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: ' 82% 남음' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: ' 69%' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: '대화 여유 ' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: '████████░░' })).toBeDefined()
 })
 
 test('구독이면 마지막 답변 뒤 60분이 지나야 캐시가 식는다', async ($, on) => {
@@ -44,7 +46,7 @@ test('구독이면 마지막 답변 뒤 60분이 지나야 캐시가 식는다',
   await $.turn.complete({ turnId: 't1', answer: '완료', durationMs: 10, isAborted: false, usage: null })
   await clock.advance(50 * 60_000)
   let band = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await band.find({ type: 'Text', text: '캐시 10분 남음' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: ' 10분' })).toBeDefined()
   await band.unmount()
   await clock.advance(11 * 60_000)
   band = await $.ui.mount({ ...BAND, surface: 'terminal' })

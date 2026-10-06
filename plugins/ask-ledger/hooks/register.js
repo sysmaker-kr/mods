@@ -120,15 +120,25 @@ export function register(on) {
     const c = counts(items)
     if (!c.total && !checking && !note) return next(e)
     const { Box, Text } = $.ui.resolve(e)
-    const parts = [Text({ bold: true, children: ['질문 장부'] })]
-    if (c.missed) parts.push(Text({ color: 'red', bold: true, children: ['놓친 질문 ' + c.missed] }))
-    if (c.partial) parts.push(Text({ color: 'yellow', children: ['일부만 답함 ' + c.partial] }))
-    if (c.decide) parts.push(Text({ color: 'cyan', children: ['내가 정할 것 ' + c.decide] }))
-    if (c.risk) parts.push(Text({ color: 'magenta', children: ['리스크 ' + c.risk] }))
+    // 칩 = 색 점 + 이름·개수 (2026-10-06 미관 개선: 전광판과 같은 톤)
+    const chip = (dot, color, label, bold) =>
+      Box({
+        flexDirection: 'row',
+        children: [
+          Text({ color, children: [dot + ' '] }),
+          Text({ color, bold: !!bold, children: [label] }),
+        ],
+      })
+    const parts = [Text({ bold: true, color: 'yellow', children: ['▍질문 장부'] })]
+    if (c.missed) parts.push(chip('●', 'red', '놓친 질문 ' + c.missed, true))
+    if (c.partial) parts.push(chip('◐', 'yellow', '일부만 답함 ' + c.partial))
+    if (!c.missed && !c.partial && c.total) parts.push(chip('✓', 'green', '놓친 질문 없음'))
+    if (c.decide) parts.push(chip('◆', 'cyan', '내가 정할 것 ' + c.decide))
+    if (c.risk) parts.push(chip('▲', 'magenta', '리스크 ' + c.risk))
     if (checking) parts.push(Text({ dimColor: true, children: ['점검 중…'] }))
     else if (note) parts.push(Text({ dimColor: true, children: [note] }))
-    parts.push(Text({ dimColor: true, children: ['/ledger'] }))
-    const mine = Box({ flexDirection: 'row', columnGap: 2, children: parts })
+    parts.push(Text({ dimColor: true, children: ['/ledger 열기'] }))
+    const mine = Box({ flexDirection: 'row', columnGap: 3, paddingX: 1, children: parts })
     const theirs = await next(e)
     return theirs ? Box({ flexDirection: 'column', children: [theirs, mine] }) : mine
   })
