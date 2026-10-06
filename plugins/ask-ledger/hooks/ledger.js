@@ -13,7 +13,8 @@ export const SYSTEM = [
   '상태: ask는 답변이 다뤘으면 done, 일부만 다뤘으면 partial, 안 다뤘으면 open. decision은 사용자가 답하기 전까지 open이고 답하면 done. risk는 해결되기 전까지 open.',
   '규칙: 기존 장부 항목의 상태가 바뀌면 updates에 적는다. 이미 있는 내용을 new로 또 만들지 않는다. 인사·잡담·감탄은 항목이 아니다.',
   'text는 30자 이내의 한국어 명사구. new는 최대 8개, 그중 risk는 최대 3개. summary는 지금까지의 논의를 3줄 이내로, 줄마다 50자 이내.',
-  '설명 없이 JSON 하나만 출력한다: {"updates":[{"id":"a1","status":"done"}],"new":[{"kind":"ask","text":"…","status":"open"}],"summary":["…"]}',
+  'detail은 항목마다 한두 문장(100자 이내): ask는 원래 무엇을 물었는지, decision은 무엇을 정해야 하고 선택지가 무엇인지, risk는 무엇이 문제고 어떻게 막는지.',
+  '설명 없이 JSON 하나만 출력한다: {"updates":[{"id":"a1","status":"done"}],"new":[{"kind":"ask","text":"…","detail":"…","status":"open"}],"summary":["…"]}',
 ].join('\n')
 
 // 긴 글은 앞뒤만 남긴다 — 질문은 대개 앞에, 결론은 대개 뒤에 있다.
@@ -68,6 +69,7 @@ export function applyVerdict(items, verdict, nextId) {
       id: PREFIX[n.kind] + id++,
       kind: n.kind,
       text: n.text.trim().slice(0, 60),
+      detail: typeof n.detail === 'string' ? n.detail.trim().slice(0, 200) : '',
       status: STATUSES.includes(n.status) ? n.status : 'open',
     })
   }

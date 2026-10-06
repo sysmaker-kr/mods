@@ -78,10 +78,15 @@ test('띠와 패널에 개수가 보인다', async ($, on) => {
   await band.unmount()
 
   const pane = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await pane.find({ type: 'Text', text: '놓친 질문 2' })).toBeDefined()
+  expect(await pane.find({ key: 'tab-놓친 질문' })).toBeDefined()
   expect(await pane.find({ key: 'reask' })).toBeDefined()
+  // 내가 정할 것 탭을 누르면 첫 항목의 카드와 '정했어요' 버튼이 나온다
+  await pane.press({ key: 'tab-내가 정할 것' })
+  expect(await pane.find({ type: 'Text', text: '롱폼 각도 승인' })).toBeDefined()
+  await pane.press({ key: 'did' })
+  expect(await pane.find({ key: 'tab-내가 정할 것' })).toBeUndefined()
   await pane.press({ key: 'clear' })
-  expect(await pane.find({ type: 'Text', text: '놓친 질문 2' })).toBeUndefined()
+  expect(await pane.find({ key: 'tab-놓친 질문' })).toBeUndefined()
   await pane.unmount()
 })
 

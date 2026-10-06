@@ -1,6 +1,6 @@
 {
   "name": "ask-ledger",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "질문 장부 — 한 번에 여러 개를 물었을 때 놓친 질문·내가 정할 것·리스크·요약을 프롬프트 위에 보여 줍니다",
   "author": { "name": "sysmaker" }
 }

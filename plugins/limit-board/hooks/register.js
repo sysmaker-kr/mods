@@ -26,17 +26,32 @@ function clockText(iso) {
   return hh + ':' + mm
 }
 
-// 건전지: 남은 양을 휴대폰 배터리처럼 채운다 (2026-10-06 사용자 "건전지 형식이 더 직관적")
-function battery(left, width) {
-  const n = Math.max(0, Math.min(width, Math.round((left / 100) * width)))
-  return '█'.repeat(n) + '░'.repeat(width - n)
-}
+// 건전지 (2026-10-06 사용자 "건전지 형식이 더 직관적" · "안 이뻐" → 휴대폰 배터리처럼 숫자를 칸 안에)
+// 남은 양만큼 색으로 채우고, 숫자는 배터리 가운데에 얹는다. 끝에 단자(▌).
+const COLOR = { green: '#3fb950', yellow: '#d29922', red: '#f85149' }
+const SHELL = '#3a3f47'
 
-// 남은 양 기준 색: 넉넉하면 초록, 절반 아래 노랑, 20% 아래 빨강
 function tone(left) {
   if (left < 20) return 'red'
   if (left < 50) return 'yellow'
   return 'green'
+}
+
+function battery(Text, Box, key, left, label, width, colorName) {
+  const w = Math.max(width, label.length + 2)
+  const pad = w - label.length
+  const face = ' '.repeat(Math.floor(pad / 2)) + label + ' '.repeat(Math.ceil(pad / 2))
+  const n = Math.max(0, Math.min(w, Math.round((left / 100) * w)))
+  const fill = COLOR[colorName || tone(left)]
+  return Box({
+    key,
+    flexDirection: 'row',
+    children: [
+      Text({ backgroundColor: fill, color: '#0d1117', bold: true, children: [face.slice(0, n)] }),
+      Text({ backgroundColor: SHELL, color: '#e6edf3', bold: true, children: [face.slice(n)] }),
+      Text({ color: SHELL, children: ['▌'] }),
+    ],
+  })
 }
 
 export function register(on) {
@@ -73,48 +88,40 @@ export function register(on) {
     if (!five && !week && ctx === null && lastAt === null) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const cols = (e.props && e.props.bodyColumns) || 100
-    const width = cols >= 110 ? 10 : cols >= 80 ? 6 : 4
-
-    // 칸 하나 = 이름 + 건전지 + 남은 양 (+ 덧붙임)
-    const cell = (label, left, value, extra, color) =>
-      Box({
-        flexDirection: 'row',
-        children: [
-          Text({ bold: true, children: [label + ' '] }),
-          Text({ dimColor: true, children: ['▕'] }),
-          Text({ color: color || tone(left), children: [battery(left, width)] }),
-          Text({ dimColor: true, children: ['▏'] }),
-          Text({ color: color || tone(left), bold: !color && left < 20, children: [' ' + value] }),
-          ...(extra ? [Text({ dimColor: true, children: [' ' + extra] })] : []),
-        ],
-      })
+    const width = cols >= 110 ? 10 : 7
+    const label = (s) => Text({ dimColor: true, children: [s + ' '] })
+    const cell = (key, name, bat, extra) =>
+      Box({ key: key + '-cell', flexDirection: 'row', children: [label(name), bat, ...(extra ? [Text({ dimColor: true, children: [' ' + extra] })] : [])] })
 
     const cells = []
     if (five) {
       const left = Math.max(0, 100 - five.pct)
       const reset = clockText(five.resetsAt)
-      cells.push(cell('5시간', left, left + '% 남음', reset && cols >= 110 ? reset + ' 충전' : ''))
+      cells.push(cell('five', '5시간', battery(Text, Box, 'five', left, left + '%', width), reset && cols >= 100 ? reset + ' 충전' : ''))
     }
     if (week) {
       const left = Math.max(0, 100 - week.pct)
-      cells.push(cell('주간', left, left + '% 남음'))
+      cells.push(cell('week', '주간', battery(Text, Box, 'week', left, left + '%', width)))
     }
     if (ctx !== null) {
       const left = Math.max(0, 100 - ctx)
-      cells.push(cell('대화 여유', left, left + '%'))
+      cells.push(cell('ctx', '대화', battery(Text, Box, 'ctx', left, left + '%', width)))
     }
     if (lastAt !== null) {
       const total = ttl()
       const leftMs = total - ((await $.clock.now()) - lastAt)
       if (leftMs <= 0) {
-        cells.push(Text({ color: 'red', bold: true, children: ['캐시 식음 · 다음 질문은 처음부터 다시 읽어요'] }))
+        cells.push(Text({ key: 'cache-cold', color: COLOR.red, bold: true, children: ['캐시 식음 · 다음 질문은 처음부터 다시 읽어요'] }))
       } else {
         const m = Math.ceil(leftMs / MIN)
         const left = Math.round((leftMs / total) * 100)
-        cells.push(cell('캐시', left, m + '분', '', m <= 10 ? 'yellow' : 'green'))
+        cells.push(cell('cache', '캐시', battery(Text, Box, 'cache', left, m + '분', width, m <= 10 ? 'yellow' : 'green')))
       }
     }
-    const mine = Box({ flexDirection: 'row', columnGap: 3, paddingX: 1, children: cells })
+    const sep = (n) => Text({ key: 'sep-' + n, dimColor: true, children: ['│'] })
+    const row = []
+    cells.forEach((c, n) => { if (n) row.push(sep(n)); row.push(c) })
+    const mine = Box({ flexDirection: 'row', columnGap: 2, paddingX: 1, children: row })
     const theirs = await next(e)
     return theirs ? Box({ flexDirection: 'column', children: [theirs, mine] }) : mine
   })

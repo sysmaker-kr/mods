@@ -14,6 +14,10 @@ let nextId = 1
 let checking = false
 let waiting = null // 판정 중에 끝난 다음 답변
 let note = ''
+let tab = '' // 패널에서 연 묶음
+let sel = null // 패널에서 고른 항목 id
+let page = 0
+const PAGE = 5
 let interactive = true // claude -p·cron에서는 판정하지 않는다(사용량 보호)
 
 function reset() {
@@ -143,75 +147,126 @@ export function register(on) {
     return theirs ? Box({ flexDirection: 'column', children: [theirs, mine] }) : mine
   })
 
-  // /ledger 패널: 묶음별 목록 + 요약 + 다시 묻기·비우기
+  // /ledger 패널 (2026-10-06 사용자: "무한정 늘리지 말고, 눌러서 자세히") —
+  // 위: 묶음 탭 · 왼쪽: 목록(한 줄씩, 최대 PAGE개) · 오른쪽: 고른 항목의 설명과 버튼
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const redraw = () => $.ui.invalidate('ui.render')
-    const body = []
-    for (const s of sections(items)) {
-      if (!s.list.length) continue
-      body.push(Text({ bold: true, color: s.color, children: [s.title + ' ' + s.list.length] }))
-      for (const i of s.list) {
-        body.push(
-          Box({
-            key: 'row-' + i.id,
-            flexDirection: 'row',
-            columnGap: 1,
-            children: [
-              Button({
-                key: 'drop-' + i.id,
-                label: 'x',
-                plain: true,
-                onPress: () => {
-                  items = items.map((x) => (x.id === i.id ? { ...x, status: 'dismissed' } : x))
-                  redraw()
-                },
-              }),
-              Text({ wrap: 'wrap', children: [i.text] }),
-            ],
-          }),
-        )
-      }
+    const cols = (e.props && e.props.bodyColumns) || 100
+    const all = sections(items)
+    const tabs = [...all.filter((x) => x.list.length), ...(summary.length ? [{ title: '요약', color: 'yellow', list: [] }] : [])]
+    if (!tabs.length) {
+      return Text({ dimColor: true, children: ['놓친 질문이 없어요. 한 번에 여러 개를 물으면 여기에 쌓입니다.'] })
     }
-    if (!body.length) body.push(Text({ dimColor: true, children: ['놓친 질문이 없어요. 한 번에 여러 개를 물으면 여기에 쌓입니다.'] }))
-    if (summary.length) {
-      body.push(Text({ children: [' '] }), Text({ bold: true, children: ['요약'] }))
-      for (const line of summary) body.push(Text({ wrap: 'wrap', children: ['· ' + line] }))
-    }
-    const actions = []
-    if (counts(items).missed + counts(items).partial > 0) {
-      actions.push(
+    if (!tabs.some((x) => x.title === tab)) tab = tabs[0].title
+    const cur = tabs.find((x) => x.title === tab)
+
+    const tabRow = Box({
+      flexDirection: 'row',
+      columnGap: 1,
+      children: tabs.map((x, n) =>
         Button({
-          key: 'reask',
-          label: '놓친 것 다시 묻기',
-          hotkey: 'r',
-          plain: true,
+          key: 'tab-' + x.title,
+          label: x.title + (x.list.length ? ' ' + x.list.length : ''),
+          hotkey: String(n + 1),
+          variant: x.title === tab ? 'primary' : undefined,
+          dimColor: x.title !== tab,
           onPress: () => {
+            tab = x.title
+            sel = null
+            page = 0
+            redraw()
+          },
+        }),
+      ),
+    })
+
+    let main
+    if (cur.title === '요약') {
+      main = Box({ flexDirection: 'column', children: summary.map((l, n) => Text({ key: 'sum-' + n, wrap: 'wrap', children: ['· ' + l] })) })
+    } else {
+      const pages = Math.max(1, Math.ceil(cur.list.length / PAGE))
+      if (page >= pages) page = pages - 1
+      const shown = cur.list.slice(page * PAGE, page * PAGE + PAGE)
+      const picked = cur.list.find((i) => i.id === sel) || shown[0]
+      sel = picked.id
+      const list = Box({
+        flexDirection: 'column',
+        width: cols >= 70 ? '45%' : '100%',
+        children: [
+          ...shown.map((i) =>
+            Button({
+              key: 'item-' + i.id,
+              label: (i.id === sel ? '▸ ' : '  ') + i.text,
+              plain: true,
+              dimColor: i.id !== sel,
+              onPress: () => {
+                sel = i.id
+                redraw()
+              },
+            }),
+          ),
+          ...(pages > 1
+            ? [
+                Box({
+                  flexDirection: 'row',
+                  columnGap: 2,
+                  children: [
+                    Text({ dimColor: true, children: [page + 1 + '/' + pages] }),
+                    Button({ key: 'more', label: '더 보기', hotkey: 'n', plain: true, onPress: () => { page = (page + 1) % pages; sel = null; redraw() } }),
+                  ],
+                }),
+              ]
+            : []),
+        ],
+      })
+      const set = (status) => {
+        items = items.map((x) => (x.id === picked.id ? { ...x, status } : x))
+        sel = null
+        redraw()
+      }
+      const acts = []
+      if (picked.kind === 'ask')
+        acts.push(Button({ key: 'one', label: '이것만 다시 묻기', hotkey: 'a', variant: 'primary', onPress: () => {
+          $.prompt.submit({ text: '앞에서 물었는데 답을 못 받은 거야: ' + picked.text + (picked.detail ? '\n(' + picked.detail + ')' : ''), asUser: true }).catch(() => {})
+          set('done')
+        } }))
+      if (picked.kind === 'decision') acts.push(Button({ key: 'did', label: '정했어요', hotkey: 'd', variant: 'primary', onPress: () => set('done') }))
+      if (picked.kind === 'risk') acts.push(Button({ key: 'ok', label: '확인했어요', hotkey: 'd', variant: 'primary', onPress: () => set('done') }))
+      acts.push(Button({ key: 'drop', label: '지우기', hotkey: 'x', dimColor: true, onPress: () => set('dismissed') }))
+      const card = Box({
+        flexDirection: 'column',
+        flexGrow: 1,
+        borderStyle: 'round',
+        borderColor: cur.color,
+        paddingX: 1,
+        children: [
+          Text({ bold: true, color: cur.color, wrap: 'wrap', children: [picked.text] }),
+          Text({ wrap: 'wrap', dimColor: !picked.detail, children: [picked.detail || '자세한 설명이 아직 없어요. 다음 답변 뒤 판정부터 채워집니다.'] }),
+          Box({ flexDirection: 'row', columnGap: 1, marginTop: 1, children: acts }),
+        ],
+      })
+      main = Box({ flexDirection: cols >= 70 ? 'row' : 'column', columnGap: 2, children: [list, card] })
+    }
+
+    const c = counts(items)
+    const foot = [
+      ...(c.missed + c.partial > 0
+        ? [Button({ key: 'reask', label: '놓친 것 모두 다시 묻기', hotkey: 'r', plain: true, onPress: () => {
             const t = reaskText(items)
             if (!t) return
             $.prompt.submit({ text: t, asUser: true }).catch(() => {})
             $.ui.close({ id: PANE }).catch(() => {})
-          },
-        }),
-      )
-    }
-    actions.push(
-      Button({
-        key: 'clear',
-        label: '장부 비우기',
-        hotkey: 'c',
-        plain: true,
-        onPress: () => {
-          reset()
-          redraw()
-        },
-      }),
-    )
-    const tail = note ? [Text({ dimColor: true, children: [note] })] : []
+          } })]
+        : []),
+      Button({ key: 'clear', label: '장부 비우기', hotkey: 'c', plain: true, dimColor: true, onPress: () => { reset(); redraw() } }),
+      ...(note ? [Text({ dimColor: true, children: [note] })] : []),
+    ]
     return Box({
       flexDirection: 'column',
-      children: [...body, Text({ children: [' '] }), Box({ flexDirection: 'row', columnGap: 3, children: actions }), ...tail],
+      rowGap: 1,
+      children: [tabRow, main, Box({ flexDirection: 'row', columnGap: 3, children: foot })],
     })
   })
 }
